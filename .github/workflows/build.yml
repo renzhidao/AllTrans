@@ -19,8 +19,11 @@ jobs:
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8" >> gradle.properties
           
       - name: Build APK
+        env:
+          GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
         
       - uses: actions/upload-artifact@v4
