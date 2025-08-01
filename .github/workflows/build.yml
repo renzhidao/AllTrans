@@ -5,29 +5,24 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - uses: actions/checkout@v4
-
+      
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
-
-      - name: create local.properties
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-
-      - name: Enable AndroidX
+          
+      - name: Setup gradle
         run: |
+          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-
-      - name: Build APK (app only)
+          
+      - name: Build APK
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
-
+        
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
