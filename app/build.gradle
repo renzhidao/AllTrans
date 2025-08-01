@@ -1,58 +1,111 @@
-/******************* AllTrans /app/build.gradle ************************/
+/*
+ * Copyright 2017 Akhil Kedia
+ * GPL v3
+ */
 
-plugins {
-    id 'com.android.application'
-}
+apply plugin: 'com.android.application'
+apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.firebase.crashlytics'
 
 android {
-    namespace       'org.alltrans.app'   // 就用这个；改不改随你
-    compileSdk      34
-
-    defaultConfig {
-        applicationId   "org.alltrans.app"
-        minSdk          21
-        targetSdk       34
-        versionCode     1
-        versionName     "1.0"
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    /************ 关键：签名（无变量→自动回落 debug） ************/
-    def _prop = { n -> project.hasProperty(n) ? project.property(n) : null }
+    /*********** 兼容“缺少 Release 变量时自动退回 debug” ***********/
+    def prop = { n -> project.hasProperty(n) ? project.property(n) : null }
 
     signingConfigs {
         publish {
-            if (_prop('RELEASE_STORE_FILE')) {
-                storeFile     file(_prop('RELEASE_STORE_FILE'))
-                storePassword _prop('RELEASE_STORE_PASSWORD')
-                keyAlias      _prop('RELEASE_KEY_ALIAS')
-                keyPassword   _prop('RELEASE_KEY_PASSWORD')
+            if (prop('RELEASE_STORE_FILE')) {
+                storeFile     file(prop('RELEASE_STORE_FILE'))
+                storePassword prop('RELEASE_STORE_PASSWORD')
+                keyAlias      prop('RELEASE_KEY_ALIAS')
+                keyPassword   prop('RELEASE_KEY_PASSWORD')
             }
         }
     }
 
-    buildTypes {
-        release {
-            signingConfig signingConfigs.publish ?: signingConfigs.debug
-            minifyEnabled false
-            shrinkResources false
-            proguardFiles  getDefaultProguardFile('proguard-android-optimize.txt'),
-                           'proguard-rules.pro'
-        }
-        debug { }
+    compileSdk 33          // 维持原来 33；你的代码里 targetSdk 30 OK
+//  buildToolsVersion '32.0.0'
+
+    defaultConfig {
+        applicationId "akhil.alltrans"
+        minSdkVersion 19
+        targetSdkVersion 30        // 原注释保留
+        versionCode 196
+        versionName "1.9.6"
+        multiDexEnabled true
+        signingConfig signingConfigs.publish ?: signingConfigs.debug
     }
-    /***************************************************************/
+
+    compileOptions {                // 新增：用 Java 17 编译
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'),
+                          'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'),
+                          'proguard-rules.pro'
+        }
+    }
+
+    namespace 'akhil.alltrans'
+}
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    compileOnly 'de.robv.android.xposed:api:82:sources'
+    compileOnly 'de.robv.android.xposed:api:82'
+
     implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    compileOnly   'de.robv.android.xposed:api:82'
-    // 还有其它库？原仓库里有就自己继续加；这里给的已足够编过
+    implementation 'com.squareup.okhttp3:okhttp:4.9.1'
+
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'androidx.percentlayout:percentlayout:1.0.0'
+
+    implementation 'com.google.firebase:firebase-analytics:21.3.0'
+    implementation 'com.google.firebase:firebase-crashlytics:18.4.0'
+    implementation 'com.google.mlkit:translate:17.0.1'
+    implementation 'com.android.support:multidex:1.0.3'
+
+    implementation 'com.codemybrainsout.rating:ratingdialog:1.0.8'
+}
+
+/**************** 可选的 VirtualXposed 辅助任务，保持不动 ****************/
+afterEvaluate {
+    installDebug.doLast {
+//        updateVirtualXposedAPP.exec()
+//        clearLog.exec()
+//        rebootVirtualXposedAPP.exec()
+//        launchVirtualXposedAPP.exec()
+    }
+}
+
+task updateVirtualXposedAPP(type: Exec) {
+    def pkg = android.defaultConfig.applicationId
+    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'update', '-e', 'pkg', pkg
+}
+
+task clearLog(type: Exec) {
+    commandLine android.adbExecutable, 'logcat', '-c'
+}
+
+task rebootVirtualXposedAPP(type: Exec) {
+    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'reboot'
+}
+
+task launchVirtualXposedAPP(type: Exec) {
+    def pkg = "com.megabox.mop"
+    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'launch', '-e', 'pkg', pkg
 }
