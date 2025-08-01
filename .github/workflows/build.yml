@@ -1,0 +1,42 @@
+name: Build Release APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Setup build environment
+      run: |
+        # 创建密钥库
+        keytool -genkey -v -keystore release.keystore -alias key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android,O=Android,C=US"
+        
+        # 创建 gradle.properties
+        echo "RELEASE_STORE_FILE=../release.keystore" >> gradle.properties
+        echo "RELEASE_STORE_PASSWORD=android" >> gradle.properties
+        echo "RELEASE_KEY_ALIAS=key" >> gradle.properties
+        echo "RELEASE_KEY_PASSWORD=android" >> gradle.properties
+        
+        # 创建假的 google-services.json
+        echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
+        
+        chmod +x gradlew
+    
+    - name: Build Release
+      run: ./gradlew assembleRelease
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: alltrans-release
+        path: app/build/outputs/apk/release/app-release.apk
