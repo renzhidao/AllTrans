@@ -130,9 +130,9 @@ jobs:
         
         chmod +x gradlew
     
-    - name: Disable Signing and Build
+    - name: Disable Signing and Fix Resources
       run: |
-        # 动态修改 app/build.gradle 来禁用release签名
+        # 动态修改 app/build.gradle 来禁用签名
         APP_BUILD_GRADLE="app/build.gradle"
         if [ ! -f "$APP_BUILD_GRADLE" ]; then
           echo "错误: $APP_BUILD_GRADLE 不存在！"
@@ -142,30 +142,32 @@ jobs:
         # 备份原文件
         cp "$APP_BUILD_GRADLE" "$APP_BUILD_GRADLE.bak"
         
-        # 如果没有 buildTypes 块，添加一个
-        if ! grep -q "buildTypes" "$APP_BUILD_GRADLE"; then
-          echo "添加 buildTypes 块到 $APP_BUILD_GRADLE"
-          echo "
-        android {
-            buildTypes {
-                release {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-                    signingConfig null  // 禁用签名
-                }
-            }
-        }" >> "$APP_BUILD_GRADLE"
-        else
-          # 修改现有 release 块，添加/替换 signingConfig null
-          sed -i '/buildTypes {/,/}/ {
-            /release {/a \        signingConfig null  // 禁用签名
-          }' "$APP_BUILD_GRADLE"
+        # 移除 defaultConfig 中的 signingConfig
+        sed -i '/defaultConfig {/,/}/ s/signingConfig signingConfigs.publish//g' "$APP_BUILD_GRADLE"
+        
+        # 在 buildTypes release 中添加 signingConfig null（如果没有）
+        if ! grep -q "signingConfig null" "$APP_BUILD_GRADLE"; then
+          sed -i '/release {/,/}/ a \            signingConfig null  // 禁用签名' "$APP_BUILD_GRADLE"
         fi
         
-        echo "=== 修改后的 app/build.gradle 内容摘要 ==="
-        cat "$APP_BUILD_GRADLE" | grep -E "buildTypes|release|signingConfig" || echo "无匹配内容"
+        # 移除 signingConfigs 块（可选，但简化）
+        sed -i '/signingConfigs {/,/}/d' "$APP_BUILD_GRADLE"
         
-        # 开始清理和构建无签名APK
+        echo "=== 修改后的 app/build.gradle 内容 ==="
+        cat "$APP_BUILD_GRADLE"
+        
+        # 诊断资源冲突（列出潜在error资源）
+        echo "=== 诊断资源文件 ==="
+        find app/src/main/res -name "*error*" -type f -print || echo "无error相关资源"
+        
+        # 如果需要，临时移除冲突资源（例如，error_icon，如果存在）
+        # find app/src/main/res -name "*error_icon*" -delete || true  # 取消注释如果需要强制移除
+        
+        echo "=== Gradle tasks 列表（诊断可用任务） ==="
+        ./gradlew tasks --all --info
+    
+    - name: Clean and Build Unsigned Release
+      run: |
         echo "=== 开始清理和构建无签名 Release APK ==="
         ./gradlew clean --info --stacktrace
         ./gradlew assembleRelease --info --stacktrace  # 如果失败，工作流停止
@@ -181,7 +183,7 @@ jobs:
         find app/build -type f -name "*.txt" -exec grep -i "error\|warning\|failed\|success" {} \; 2>/dev/null || echo "无报告文件"
         # 如果无APK/AAB，强制失败
         if [ $(find . -name "*.apk" -o -name "*.aab" | wc -l) -eq 0 ]; then
-          echo "错误: 没有生成任何APK或AAB文件！请检查app/build.gradle中的android { buildTypes { release { ... } } } 配置。"
+          echo "错误: 没有生成任何APK或AAB文件！请检查资源冲突或依赖版本。"
           exit 1
         fi
     
