@@ -27,17 +27,21 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.Filter;
+import android.widget.Filterable;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.google.firebase.analytics.FirebaseAnalytics;
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -62,6 +66,7 @@ public class AppListFragment extends Fragment {
     private FragmentActivity context;
     private android.widget.ListView listview;
     private FirebaseAnalytics mFirebaseAnalytics;
+    private EditText searchFilter;
 
     @Nullable
     @Override
@@ -77,25 +82,9 @@ public class AppListFragment extends Fragment {
         settings = this.getActivity().getSharedPreferences("AllTransPref", Context.MODE_PRIVATE);
         mFirebaseAnalytics = FirebaseAnalytics.getInstance(context);
 
-//        if (BuildConfig.DEBUG) {
-//            SharedPreferences.Editor editor = settings.edit();
-//            editor.putBoolean("codepath.apps.demointroandroid", true);
-//            editor.putBoolean("com.astroframe.seoulbus", true);
-//            editor.putBoolean("com.nhn.android.nmap", true);
-//            editor.putBoolean("com.kakao.taxi", true);
-//            editor.putBoolean("com.fineapp.yogiyo", true);
-//            editor.putBoolean("com.cgv.android.movieapp", true);
-//            editor.putBoolean("com.wooricard.smartapp", true);
-//            editor.putBoolean("com.google.android.talk", true);
-//            editor.putBoolean("com.ebay.global.gmarket", true);
-//            editor.putBoolean("com.foodfly.gcm", true);
-//            editor.putBoolean("com.ktcs.whowho", true);
-//            editor.putBoolean("Debug", true);
-//            editor.putString("SubscriptionKey", getString(R.string.microsoft_key));
-//            editor.apply();
-//        }
         //noinspection ConstantConditions
         listview = getView().findViewById(R.id.AppsList);
+        searchFilter = getView().findViewById(R.id.searchFilter);
 
         new PrepareAdapter().execute();
 
@@ -115,6 +104,23 @@ public class AppListFragment extends Fragment {
                         .commitAllowingStateLoss();
             }
         });
+
+        // 添加搜索功能
+        searchFilter.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (listview.getAdapter() instanceof StableArrayAdapter) {
+                    ((StableArrayAdapter) listview.getAdapter()).getFilter().filter(s);
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        });
+
         fireBaseAnalytics();
     }
 
@@ -148,13 +154,16 @@ public class AppListFragment extends Fragment {
         ImageView imageView;
         CheckBox checkBox;
     }
-    private class StableArrayAdapter extends ArrayAdapter<ApplicationInfo> {
+
+    private class StableArrayAdapter extends ArrayAdapter<ApplicationInfo> implements Filterable {
 
         final PackageManager pm;
         final HashMap<ApplicationInfo, Integer> mIdMap = new HashMap<>();
         private final Context context2;
-        private final List<ApplicationInfo> values;
+        private final List<ApplicationInfo> originalValues;
+        private List<ApplicationInfo> filteredValues;
         private final LayoutInflater inflater;
+        private ApplicationFilter filter;
 
         public StableArrayAdapter(Context context, @SuppressWarnings({"SameParameterValue", "UnusedParameters"}) int textViewResourceId,
                                   List<ApplicationInfo> packages) {
@@ -163,16 +172,26 @@ public class AppListFragment extends Fragment {
             pm = context2.getPackageManager();
             inflater = (LayoutInflater) context2
                     .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-            values = new LinkedList<>(packages);
-            for (int i = 0; i < values.size(); ++i) {
-                mIdMap.put(values.get(i), i);
+            originalValues = new ArrayList<>(packages);
+            filteredValues = new ArrayList<>(packages);
+            for (int i = 0; i < originalValues.size(); ++i) {
+                mIdMap.put(originalValues.get(i), i);
             }
+        }
+
+        @Override
+        public int getCount() {
+            return filteredValues.size();
+        }
+
+        @Override
+        public ApplicationInfo getItem(int position) {
+            return filteredValues.get(position);
         }
 
         @Override
         public long getItemId(int position) {
             ApplicationInfo item = getItem(position);
-            //noinspection ConstantConditions
             return mIdMap.get(item);
         }
 
@@ -196,9 +215,11 @@ public class AppListFragment extends Fragment {
             } else {
                 viewHolder = (ViewHolder) convertView.getTag();
             }
-            String packageName = values.get(position).packageName;
-            String label = (String) pm.getApplicationLabel(values.get(position));
-            Drawable icon = pm.getApplicationIcon(values.get(position));
+            
+            ApplicationInfo appInfo = filteredValues.get(position);
+            String packageName = appInfo.packageName;
+            String label = (String) pm.getApplicationLabel(appInfo);
+            Drawable icon = pm.getApplicationIcon(appInfo);
 
             viewHolder.textView.setText(label);
             viewHolder.textView.setSelected(true);
@@ -206,7 +227,7 @@ public class AppListFragment extends Fragment {
             viewHolder.textView2.setSelected(true);
             viewHolder.imageView.setImageDrawable(icon);
 
-            viewHolder.checkBox.setTag(position);
+            viewHolder.checkBox.setTag(packageName);
             utils.debugLog("For package " + packageName + " ");
             if (settings.contains(packageName)) {
                 viewHolder.checkBox.setChecked(true);
@@ -218,8 +239,7 @@ public class AppListFragment extends Fragment {
                 @Override
                 public void onClick(View v) {
                     CheckBox checkBox1 = (CheckBox) v;
-                    int position = (Integer) checkBox1.getTag();
-                    String packageName = values.get(position).packageName;
+                    String packageName = (String) checkBox1.getTag();
                     utils.debugLog("CheckBox clicked!" + packageName);
 
                     if (checkBox1.isChecked()) {
@@ -238,6 +258,48 @@ public class AppListFragment extends Fragment {
             return convertView;
         }
 
+        @Override
+        public Filter getFilter() {
+            if (filter == null) {
+                filter = new ApplicationFilter();
+            }
+            return filter;
+        }
+
+        private class ApplicationFilter extends Filter {
+            @Override
+            protected FilterResults performFiltering(CharSequence constraint) {
+                FilterResults results = new FilterResults();
+                
+                if (constraint == null || constraint.length() == 0) {
+                    results.values = originalValues;
+                    results.count = originalValues.size();
+                } else {
+                    List<ApplicationInfo> filteredList = new ArrayList<>();
+                    String searchText = constraint.toString().toLowerCase();
+                    
+                    for (ApplicationInfo app : originalValues) {
+                        String appName = pm.getApplicationLabel(app).toString().toLowerCase();
+                        String packageName = app.packageName.toLowerCase();
+                        
+                        if (appName.contains(searchText) || packageName.contains(searchText)) {
+                            filteredList.add(app);
+                        }
+                    }
+                    
+                    results.values = filteredList;
+                    results.count = filteredList.size();
+                }
+                
+                return results;
+            }
+
+            @Override
+            protected void publishResults(CharSequence constraint, FilterResults results) {
+                filteredValues = (List<ApplicationInfo>) results.values;
+                notifyDataSetChanged();
+            }
+        }
     }
 
     private class PrepareAdapter extends AsyncTask<Void, Void, StableArrayAdapter> {
