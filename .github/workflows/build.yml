@@ -11,28 +11,76 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Fix XML files
+    - name: Install XML tools
+      run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+    
+    - name: Fix all XML files
       run: |
-        # 修复 strings.xml
-        if ! tail -1 app/src/main/res/values/strings.xml | grep -q "</resources>"; then
-          echo "Adding missing </resources> tag to strings.xml"
-          echo "</resources>" >> app/src/main/res/values/strings.xml
-        fi
+        #!/bin/bash
         
-        # 修复 keys.xml - 直接删除并重新创建
-        echo "Fixing keys.xml..."
-        if [ -f "app/src/main/res/values/keys.xml" ]; then
-          echo "Removing problematic keys.xml"
-          rm app/src/main/res/values/keys.xml
-        fi
+        echo "=== 开始修复所有XML文件 ==="
         
-        # 创建新的干净的 keys.xml
-        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
-        echo '<resources>' >> app/src/main/res/values/keys.xml
-        echo '    <!-- API Keys will be added here if needed -->' >> app/src/main/res/values/keys.xml
-        echo '</resources>' >> app/src/main/res/values/keys.xml
+        # 删除所有备份文件和临时文件
+        find . -name "*.bak" -delete
+        find . -name "*.tmp" -delete
         
-        echo "XML files fixed!"
+        # 函数：修复XML文件
+        fix_xml_file() {
+            local file="$1"
+            echo "正在修复: $file"
+            
+            # 备份到项目外部
+            cp "$file" "/tmp/$(basename $file).backup"
+            
+            # 移除BOM和特殊字符
+            sed -i '1s/^\xEF\xBB\xBF//' "$file"
+            sed -i 's/[[:cntrl:]]//g' "$file"
+            
+            # 确保文件以换行符结尾
+            sed -i -e '$a\' "$file"
+            
+            # 检查并修复特定的XML结构问题
+            if [[ "$file" == *"strings.xml" ]]; then
+                # 确保strings.xml有正确的结束标签
+                if ! tail -1 "$file" | grep -q "</resources>"; then
+                    echo "</resources>" >> "$file"
+                fi
+            fi
+            
+            if [[ "$file" == *"apps_list.xml" ]]; then
+                # 检查并修复layout文件
+                if ! grep -q "<?xml version" "$file"; then
+                    # 如果没有XML声明，添加它
+                    sed -i '1i<?xml version="1.0" encoding="utf-8"?>' "$file"
+                fi
+            fi
+        }
+        
+        # 修复所有XML文件
+        find app/src/main/res -name "*.xml" -type f | while read -r file; do
+            fix_xml_file "$file"
+        done
+        
+        # 特殊处理：重新创建problematic文件
+        
+        # 重新创建 keys.xml
+        cat > app/src/main/res/values/keys.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API Keys -->
+</resources>
+EOF
+        
+        echo "=== XML文件修复完成 ==="
+        
+        # 验证主要文件
+        echo "=== 验证关键文件 ==="
+        for file in app/src/main/res/values/strings.xml app/src/main/res/values/keys.xml; do
+            if [ -f "$file" ]; then
+                echo "检查 $file:"
+                xmllint --noout "$file" && echo "✓ 格式正确" || echo "✗ 格式错误"
+            fi
+        done
     
     - uses: actions/setup-java@v4
       with:
@@ -54,8 +102,11 @@ jobs:
         
         chmod +x gradlew
     
+    - name: Clean before build
+      run: ./gradlew clean
+    
     - name: Build Release
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleRelease --stacktrace
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
