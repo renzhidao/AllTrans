@@ -94,7 +94,6 @@ public class AppListFragment extends Fragment {
 //            editor.putString("SubscriptionKey", getString(R.string.microsoft_key));
 //            editor.apply();
 //        }
-
         //noinspection ConstantConditions
         listview = getView().findViewById(R.id.AppsList);
 
@@ -149,7 +148,6 @@ public class AppListFragment extends Fragment {
         ImageView imageView;
         CheckBox checkBox;
     }
-
     private class StableArrayAdapter extends ArrayAdapter<ApplicationInfo> {
 
         final PackageManager pm;
@@ -289,7 +287,7 @@ public class AppListFragment extends Fragment {
             else
                 return null;
         }
-
+ 
         protected void onPostExecute(StableArrayAdapter adapter) {
             if (adapter == null)
                 return;
@@ -332,4 +330,3 @@ public class AppListFragment extends Fragment {
         }
     }
 }
-
