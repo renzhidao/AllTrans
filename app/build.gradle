@@ -22,20 +22,21 @@ android {
         }
     }
 
-    compileSdk 33          // 维持原来 33；你的代码里 targetSdk 30 OK
+    compileSdk 33
 //  buildToolsVersion '32.0.0'
 
     defaultConfig {
         applicationId "akhil.alltrans"
         minSdkVersion 19
-        targetSdkVersion 33        // 修改：从 30 改为 33
+        targetSdkVersion 33
         versionCode 196
         versionName "1.9.6"
         multiDexEnabled true
-        signingConfig signingConfigs.publish ?: signingConfigs.debug
+        // 删除这行，在 buildTypes 中处理签名
+        // signingConfig signingConfigs.publish ?: signingConfigs.debug
     }
 
-    compileOptions {                // 新增：用 Java 17 编译
+    compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -47,6 +48,12 @@ android {
                           'proguard-rules.pro'
         }
         release {
+            // 只有在有完整签名配置时才使用 publish，否则使用 debug
+            if (prop('RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.publish
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'),
                           'proguard-rules.pro'
