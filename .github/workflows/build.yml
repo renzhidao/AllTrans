@@ -11,29 +11,74 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Fix XML files
+    - name: Create fixed XML files
       run: |
-        echo "=== 修复 XML 文件 ==="
+        echo "=== 创建修复后的XML文件 ==="
         
-        # 1. 修复 apps_list.xml - 添加缺失的结束标签
-        if ! grep -q "</LinearLayout>" app/src/main/res/layout/apps_list.xml; then
-            echo "修复 apps_list.xml"
-            echo "</LinearLayout>" >> app/src/main/res/layout/apps_list.xml
-        fi
+        # 1. 修复 apps_list.xml
+        cat > app/src/main/res/layout/apps_list.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright 2017 Akhil Kedia
+  ~ This file is part of AllTrans.
+  ~
+  ~ AllTrans is free software: you can redistribute it and/or modify
+  ~ it under the terms of the GNU General Public License as published by
+  ~ the Free Software Foundation, either version 3 of the License, or
+  ~ (at your option) any later version.
+  ~
+  ~ AllTrans is distributed in the hope that it will be useful,
+  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
+  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  ~ GNU General Public License for more details.
+  ~
+  ~ You should have received a copy of the GNU General Public License
+  ~ along with AllTrans. If not, see <http://www.gnu.org/licenses/>.
+  ~
+  -->
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+    <android.widget.ListView
+        android:id="@+id/AppsList"
+        style="@android:style/Widget.DeviceDefault.Light.ListView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:headerDividersEnabled="false" />
+</LinearLayout>
+EOF
         
-        # 2. 修复 strings.xml - 添加缺失的结束标签
+        # 2. 修复 strings.xml - 只添加结束标签
         if ! grep -q "</resources>" app/src/main/res/values/strings.xml; then
-            echo "修复 strings.xml"
             echo "</resources>" >> app/src/main/res/values/strings.xml
         fi
         
-        # 3. 重新创建 keys.xml
-        echo "创建 keys.xml"
-        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
-        echo '<resources>' >> app/src/main/res/values/keys.xml
-        echo '</resources>' >> app/src/main/res/values/keys.xml
+        # 3. 创建 keys.xml
+        cat > app/src/main/res/values/keys.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+</resources>
+EOF
         
-        echo "=== XML 文件修复完成 ==="
+        # 4. 创建 ic_list_icon_placeholder.xml
+        mkdir -p app/src/main/res/drawable-anydpi-v4
+        cat > app/src/main/res/drawable-anydpi-v4/ic_list_icon_placeholder.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorOnSurface">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2L11,7h2v2z"/>
+</vector>
+EOF
+        
+        echo "=== XML 文件创建完成 ==="
     
     - uses: actions/setup-java@v4
       with:
