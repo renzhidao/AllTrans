@@ -121,18 +121,19 @@ jobs:
       run: |
         # 不生成keystore，因为我们禁用签名
         
-        # 添加gradle.properties（无签名相关）
+        # 添加gradle.properties（无签名相关，增加heap size避免缓存警告）
         echo "android.useAndroidX=true" >> gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
+        echo "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m" >> gradle.properties  # 增加内存避免缓存问题
         
         # 生成google-services.json
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
         chmod +x gradlew
     
-    - name: Disable Signing and Fix Resources
+    - name: Disable Signing and Fix Build Gradle
       run: |
-        # 动态修改 app/build.gradle 来禁用签名
+        # 动态修改 app/build.gradle 来禁用签名（精确移除相关行）
         APP_BUILD_GRADLE="app/build.gradle"
         if [ ! -f "$APP_BUILD_GRADLE" ]; then
           echo "错误: $APP_BUILD_GRADLE 不存在！"
@@ -142,29 +143,30 @@ jobs:
         # 备份原文件
         cp "$APP_BUILD_GRADLE" "$APP_BUILD_GRADLE.bak"
         
-        # 移除 defaultConfig 中的 signingConfig
-        sed -i '/defaultConfig {/,/}/ s/signingConfig signingConfigs.publish//g' "$APP_BUILD_GRADLE"
+        # 移除 signingConfigs 整个块（安全删除，从 { 到 }）
+        sed -i '/signingConfigs {/,/}/d' "$APP_BUILD_GRADLE"
         
-        # 在 buildTypes release 中添加 signingConfig null（如果没有）
-        if ! grep -q "signingConfig null" "$APP_BUILD_GRADLE"; then
+        # 移除 defaultConfig 中的 signingConfig 行
+        sed -i '/signingConfig signingConfigs.publish/d' "$APP_BUILD_GRADLE"
+        
+        # 在 buildTypes release 中添加 signingConfig null（如果没有签名相关）
+        if ! grep -q "signingConfig" "$APP_BUILD_GRADLE"; then
           sed -i '/release {/,/}/ a \            signingConfig null  // 禁用签名' "$APP_BUILD_GRADLE"
         fi
         
-        # 移除 signingConfigs 块（可选，但简化）
-        sed -i '/signingConfigs {/,/}/d' "$APP_BUILD_GRADLE"
+        # 确保 namespace 在 android { } 内，且没有多余 }
+        sed -i '/namespace /s/^/    /' "$APP_BUILD_GRADLE"  # 如果namespace在块外，缩进它
         
         echo "=== 修改后的 app/build.gradle 内容 ==="
         cat "$APP_BUILD_GRADLE"
         
-        # 诊断资源冲突（列出潜在error资源）
+        # 验证修改后的 build.gradle 语法（尝试编译）
+        echo "=== 验证 build.gradle 语法 ==="
+        ./gradlew help --info || (echo "语法验证失败，回滚修改" && mv "$APP_BUILD_GRADLE.bak" "$APP_BUILD_GRADLE")
+        
+        # 诊断资源（如果有error相关，列出）
         echo "=== 诊断资源文件 ==="
         find app/src/main/res -name "*error*" -type f -print || echo "无error相关资源"
-        
-        # 如果需要，临时移除冲突资源（例如，error_icon，如果存在）
-        # find app/src/main/res -name "*error_icon*" -delete || true  # 取消注释如果需要强制移除
-        
-        echo "=== Gradle tasks 列表（诊断可用任务） ==="
-        ./gradlew tasks --all --info
     
     - name: Clean and Build Unsigned Release
       run: |
@@ -183,7 +185,7 @@ jobs:
         find app/build -type f -name "*.txt" -exec grep -i "error\|warning\|failed\|success" {} \; 2>/dev/null || echo "无报告文件"
         # 如果无APK/AAB，强制失败
         if [ $(find . -name "*.apk" -o -name "*.aab" | wc -l) -eq 0 ]; then
-          echo "错误: 没有生成任何APK或AAB文件！请检查资源冲突或依赖版本。"
+          echo "错误: 没有生成任何APK或AAB文件！请检查app/build.gradle语法或依赖。"
           exit 1
         fi
     
