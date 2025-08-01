@@ -61,15 +61,11 @@ jobs:
             fix_xml_file "$file"
         done
         
-        # 特殊处理：重新创建problematic文件
-        
         # 重新创建 keys.xml
-        cat > app/src/main/res/values/keys.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- API Keys -->
-</resources>
-EOF
+        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
+        echo '<resources>' >> app/src/main/res/values/keys.xml
+        echo '    <!-- API Keys -->' >> app/src/main/res/values/keys.xml
+        echo '</resources>' >> app/src/main/res/values/keys.xml
         
         echo "=== XML文件修复完成 ==="
         
