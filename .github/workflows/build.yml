@@ -16,20 +16,22 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     
-    - name: Build APK without signing
+    - name: Prepare and Build
       run: |
         # 创建必需的空文件
         mkdir -p app/src/main/res/values
         echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > app/src/main/res/values/keys.xml
         
         # 修复apps_list.xml
-        echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><ListView android:id="@+id/apps_list" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>' > app/src/main/res/layout/apps_list.xml
+        mkdir -p app/src/main/res/layout
+        echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"><ListView android:id="@+id/apps_list" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>' > app/src/main/res/layout/apps_list.xml
         
         # 创建假的google-services.json
+        mkdir -p app
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
-        # 直接覆盖build.gradle为无签名版本
-        cat > app/build.gradle << 'EOF'
+        # 直接覆盖build.gradle为无签名版本（使用安全的多行语法）
+        cat << 'EOF' > app/build.gradle
 apply plugin: 'com.android.application'
 
 android {
@@ -109,12 +111,20 @@ task launchVirtualXposedAPP(type: Exec) {
 }
 EOF
         
+        # 验证文件是否创建成功
+        echo "=== 文件验证 ==="
+        ls -l app/src/main/res/values/keys.xml
+        ls -l app/src/main/res/layout/apps_list.xml
+        ls -l app/google-services.json
+        head -n 5 app/build.gradle
+        
         # 构建
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --stacktrace --info
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: alltrans-debug
         path: app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: error
