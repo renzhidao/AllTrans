@@ -102,7 +102,7 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
                             Request request = new Request.Builder()
                                     .url("https://api.github.com/gists/fbe99628496b1d349347d3212c837d8d/comments")
                                     .method("POST", body)
-                                    .addHeader("Authorization", "token "+getString(R.string.github_key))
+                                    // .addHeader("Authorization", "token "+getString(R.string.github_key))  // 注释掉这行
                                     .addHeader("Content-Type", "application/json")
                                     .addHeader("accept", "*/*")
                                     .build();
@@ -183,4 +183,3 @@ public class MainActivity extends FragmentActivity implements View.OnClickListen
     }
 
 }
-
