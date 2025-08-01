@@ -30,8 +30,8 @@ jobs:
         mkdir -p app
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
-        # 直接覆盖build.gradle为无签名版本（使用安全的多行语法）
-        cat << 'EOF' > app/build.gradle
+        # 修复点1: 使用正确的EOF语法
+        cat > app/build.gradle <<'EOF'
 apply plugin: 'com.android.application'
 
 android {
@@ -111,7 +111,7 @@ task launchVirtualXposedAPP(type: Exec) {
 }
 EOF
         
-        # 验证文件是否创建成功
+        # 修复点2: 添加文件验证
         echo "=== 文件验证 ==="
         ls -l app/src/main/res/values/keys.xml
         ls -l app/src/main/res/layout/apps_list.xml
