@@ -11,6 +11,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Fix strings.xml
+      run: |
+        # 检查文件是否以</resources>结尾
+        if ! tail -1 app/src/main/res/values/strings.xml | grep -q "</resources>"; then
+          echo "Adding missing </resources> tag"
+          echo "</resources>" >> app/src/main/res/values/strings.xml
+        fi
+        
+        # 验证修复后的XML格式
+        xmllint --noout app/src/main/res/values/strings.xml
+    
     - uses: actions/setup-java@v4
       with:
         java-version: '17'
@@ -18,10 +29,8 @@ jobs:
     
     - name: Setup build environment
       run: |
-        # 创建密钥库
         keytool -genkey -v -keystore release.keystore -alias key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android,O=Android,C=US"
         
-        # 创建 gradle.properties（添加 AndroidX 支持）
         echo "RELEASE_STORE_FILE=../release.keystore" >> gradle.properties
         echo "RELEASE_STORE_PASSWORD=android" >> gradle.properties
         echo "RELEASE_KEY_ALIAS=key" >> gradle.properties
@@ -29,7 +38,6 @@ jobs:
         echo "android.useAndroidX=true" >> gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
         
-        # 创建假的 google-services.json
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
         chmod +x gradlew
