@@ -18,41 +18,30 @@ jobs:
         
         echo "=== 全面修复所有XML文件 ==="
         
-        # 函数：安全地添加内容到文件
-        safe_append() {
-            local file="$1"
-            local content="$2"
-            local search="$3"
-            
-            if [ -f "$file" ] && ! grep -Fq "$search" "$file"; then
-                echo "$content" >> "$file"
-                echo "已修复: $file"
-            fi
-        }
-        
-        # 函数：完全重写文件
-        rewrite_file() {
-            local file="$1"
-            local content="$2"
-            
-            echo "$content" > "$file"
-            echo "已重写: $file"
-        }
-        
         # 1. 修复 apps_list.xml
-        safe_append "app/src/main/res/layout/apps_list.xml" "</LinearLayout>" "</LinearLayout>"
+        if ! grep -q "</LinearLayout>" app/src/main/res/layout/apps_list.xml; then
+            echo "</LinearLayout>" >> app/src/main/res/layout/apps_list.xml
+            echo "已修复: apps_list.xml"
+        fi
         
         # 2. 修复 strings.xml
-        safe_append "app/src/main/res/values/strings.xml" "</resources>" "</resources>"
+        if ! grep -q "</resources>" app/src/main/res/values/strings.xml; then
+            echo "</resources>" >> app/src/main/res/values/strings.xml
+            echo "已修复: strings.xml"
+        fi
         
         # 3. 重写 keys.xml
-        rewrite_file "app/src/main/res/values/keys.xml" '<?xml version="1.0" encoding="utf-8"?>
+        cat > app/src/main/res/values/keys.xml << 'KEYS_EOF'
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-</resources>'
+</resources>
+KEYS_EOF
+        echo "已重写: keys.xml"
         
         # 4. 确保drawable目录存在并修复图标文件
         mkdir -p app/src/main/res/drawable-anydpi-v4
-        rewrite_file "app/src/main/res/drawable-anydpi-v4/ic_list_icon_placeholder.xml" '<?xml version="1.0" encoding="utf-8"?>
+        cat > app/src/main/res/drawable-anydpi-v4/ic_list_icon_placeholder.xml << 'ICON_EOF'
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -62,52 +51,14 @@ jobs:
     <path
         android:fillColor="@android:color/white"
         android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2L11,7h2v2z"/>
-</vector>'
+</vector>
+ICON_EOF
+        echo "已重写: ic_list_icon_placeholder.xml"
         
-        # 5. 批量检查并修复所有layout文件
-        find app/src/main/res/layout -name "*.xml" -type f | while read -r file; do
-            if [ -f "$file" ]; then
-                # 获取第一个非注释、非XML声明的标签
-                first_tag=$(grep -v "^<?xml\|^<!--" "$file" | grep -m1 "^<[^/]" | sed 's/<KATEX_INLINE_OPEN[^ >]*KATEX_INLINE_CLOSE.*/\1/' | head -1)
-                if [ ! -z "$first_tag" ] && [ "$first_tag" != "xml" ]; then
-                    end_tag="</$first_tag>"
-                    if ! grep -Fq "$end_tag" "$file"; then
-                        echo "$end_tag" >> "$file"
-                        echo "已为 $file 添加结束标签: $end_tag"
-                    fi
-                fi
-            fi
-        done
-        
-        # 6. 批量检查并修复所有values文件
-        find app/src/main/res/values -name "*.xml" -type f | while read -r file; do
-            if [ -f "$file" ]; then
-                safe_append "$file" "</resources>" "</resources>"
-            fi
-        done
-        
-        # 7. 清理任何可能存在的备份文件
+        # 5. 清理备份文件
         find app/src/main/res -name "*.bak" -delete 2>/dev/null || true
-        find app/src/main/res -name "*.tmp" -delete 2>/dev/null || true
         
-        echo "=== XML修复完成，验证文件 ==="
-        
-        # 验证关键文件
-        key_files=(
-            "app/src/main/res/layout/apps_list.xml"
-            "app/src/main/res/values/strings.xml"
-            "app/src/main/res/values/keys.xml"
-            "app/src/main/res/drawable-anydpi-v4/ic_list_icon_placeholder.xml"
-        )
-        
-        for file in "${key_files[@]}"; do
-            if [ -f "$file" ]; then
-                echo "✓ $file 存在"
-                tail -2 "$file" | head -1
-            else
-                echo "✗ $file 不存在"
-            fi
-        done
+        echo "=== XML修复完成 ==="
     
     - uses: actions/setup-java@v4
       with:
@@ -129,10 +80,8 @@ jobs:
         
         chmod +x gradlew
     
-    - name: Clean and Build
-      run: |
-        ./gradlew clean
-        ./gradlew assembleRelease
+    - name: Build Release
+      run: ./gradlew assembleRelease
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
