@@ -11,72 +11,55 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install XML tools
-      run: sudo apt-get update && sudo apt-get install -y libxml2-utils
-    
-    - name: Fix all XML files
+    - name: Fix all incomplete XML files
       run: |
-        #!/bin/bash
-        
         echo "=== 开始修复所有XML文件 ==="
         
-        # 删除所有备份文件和临时文件
-        find . -name "*.bak" -delete
-        find . -name "*.tmp" -delete
-        
-        # 函数：修复XML文件
-        fix_xml_file() {
+        # 函数：检查并修复XML文件
+        check_and_fix_xml() {
             local file="$1"
-            echo "正在修复: $file"
+            local expected_end="$2"
             
-            # 备份到项目外部
-            cp "$file" "/tmp/$(basename $file).backup"
-            
-            # 移除BOM和特殊字符
-            sed -i '1s/^\xEF\xBB\xBF//' "$file"
-            sed -i 's/[[:cntrl:]]//g' "$file"
-            
-            # 确保文件以换行符结尾
-            sed -i -e '$a\' "$file"
-            
-            # 检查并修复特定的XML结构问题
-            if [[ "$file" == *"strings.xml" ]]; then
-                # 确保strings.xml有正确的结束标签
-                if ! tail -1 "$file" | grep -q "</resources>"; then
-                    echo "</resources>" >> "$file"
-                fi
-            fi
-            
-            if [[ "$file" == *"apps_list.xml" ]]; then
-                # 检查并修复layout文件
-                if ! grep -q "<?xml version" "$file"; then
-                    # 如果没有XML声明，添加它
-                    sed -i '1i<?xml version="1.0" encoding="utf-8"?>' "$file"
+            if [ -f "$file" ]; then
+                if ! tail -1 "$file" | grep -q "$expected_end"; then
+                    echo "修复 $file - 添加 $expected_end"
+                    echo "$expected_end" >> "$file"
+                else
+                    echo "$file 已经有正确的结束标签"
                 fi
             fi
         }
         
-        # 修复所有XML文件
-        find app/src/main/res -name "*.xml" -type f | while read -r file; do
-            fix_xml_file "$file"
-        done
+        # 修复已知的问题文件
+        check_and_fix_xml "app/src/main/res/layout/apps_list.xml" "</LinearLayout>"
+        check_and_fix_xml "app/src/main/res/values/strings.xml" "</resources>"
         
-        # 重新创建 keys.xml
-        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
-        echo '<resources>' >> app/src/main/res/values/keys.xml
-        echo '    <!-- API Keys -->' >> app/src/main/res/values/keys.xml
-        echo '</resources>' >> app/src/main/res/values/keys.xml
-        
-        echo "=== XML文件修复完成 ==="
-        
-        # 验证主要文件
-        echo "=== 验证关键文件 ==="
-        for file in app/src/main/res/values/strings.xml app/src/main/res/values/keys.xml; do
+        # 检查所有layout文件
+        for file in app/src/main/res/layout/*.xml; do
             if [ -f "$file" ]; then
-                echo "检查 $file:"
-                xmllint --noout "$file" && echo "✓ 格式正确" || echo "✗ 格式错误"
+                # 获取第一个元素标签
+                first_tag=$(grep -m1 "^<[^?!]" "$file" | sed 's/<KATEX_INLINE_OPEN[^ >\/]*KATEX_INLINE_CLOSE.*/\1/')
+                if [ ! -z "$first_tag" ]; then
+                    check_and_fix_xml "$file" "</$first_tag>"
+                fi
             fi
         done
+        
+        # 检查所有values文件
+        for file in app/src/main/res/values/*.xml; do
+            if [ -f "$file" ]; then
+                check_and_fix_xml "$file" "</resources>"
+            fi
+        done
+        
+        # 重新创建 keys.xml（如果有问题）
+        if [ -f "app/src/main/res/values/keys.xml" ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
+            echo '<resources>' >> app/src/main/res/values/keys.xml
+            echo '</resources>' >> app/src/main/res/values/keys.xml
+        fi
+        
+        echo "=== XML文件修复完成 ==="
     
     - uses: actions/setup-java@v4
       with:
@@ -98,11 +81,8 @@ jobs:
         
         chmod +x gradlew
     
-    - name: Clean before build
-      run: ./gradlew clean
-    
     - name: Build Release
-      run: ./gradlew assembleRelease --stacktrace
+      run: ./gradlew assembleRelease
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
