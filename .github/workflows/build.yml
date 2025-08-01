@@ -11,8 +11,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install XML Tools
-      run: sudo apt-get update && sudo apt-get install -y libxml2-utils tree  # 添加tree用于目录树输出
+    - name: Install Tools
+      run: sudo apt-get update && sudo apt-get install -y libxml2-utils tree  # 用于xmllint和tree
     
     - name: Comprehensive Diagnosis and Fix
       run: |
@@ -119,14 +119,9 @@ jobs:
     
     - name: Setup build environment
       run: |
-        # 生成keystore在当前目录
-        keytool -genkey -v -keystore release.keystore -alias key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android,O=Android,C=US"
+        # 不生成keystore，因为我们禁用签名
         
-        # 使用绝对路径避免相对路径问题
-        echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/release.keystore" >> gradle.properties
-        echo "RELEASE_STORE_PASSWORD=android" >> gradle.properties
-        echo "RELEASE_KEY_ALIAS=key" >> gradle.properties
-        echo "RELEASE_KEY_PASSWORD=android" >> gradle.properties
+        # 添加gradle.properties（无签名相关）
         echo "android.useAndroidX=true" >> gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
         
@@ -135,18 +130,48 @@ jobs:
         
         chmod +x gradlew
     
-    - name: Clean and Build Release with Debug
+    - name: Disable Signing and Build
       run: |
-        echo "=== Gradle 版本和配置诊断 ==="
-        ./gradlew --version
-        echo "=== build.gradle 内容摘要 ==="
-        cat build.gradle | grep -E "plugins|dependencies|android|version" || echo "无匹配内容"
-        echo "=== 开始清理和构建 ==="
+        # 动态修改 app/build.gradle 来禁用release签名
+        APP_BUILD_GRADLE="app/build.gradle"
+        if [ ! -f "$APP_BUILD_GRADLE" ]; then
+          echo "错误: $APP_BUILD_GRADLE 不存在！"
+          exit 1
+        fi
+        
+        # 备份原文件
+        cp "$APP_BUILD_GRADLE" "$APP_BUILD_GRADLE.bak"
+        
+        # 如果没有 buildTypes 块，添加一个
+        if ! grep -q "buildTypes" "$APP_BUILD_GRADLE"; then
+          echo "添加 buildTypes 块到 $APP_BUILD_GRADLE"
+          echo "
+        android {
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                    signingConfig null  // 禁用签名
+                }
+            }
+        }" >> "$APP_BUILD_GRADLE"
+        else
+          # 修改现有 release 块，添加/替换 signingConfig null
+          sed -i '/buildTypes {/,/}/ {
+            /release {/a \        signingConfig null  // 禁用签名
+          }' "$APP_BUILD_GRADLE"
+        fi
+        
+        echo "=== 修改后的 app/build.gradle 内容摘要 ==="
+        cat "$APP_BUILD_GRADLE" | grep -E "buildTypes|release|signingConfig" || echo "无匹配内容"
+        
+        # 开始清理和构建无签名APK
+        echo "=== 开始清理和构建无签名 Release APK ==="
         ./gradlew clean --info --stacktrace
-        ./gradlew assembleRelease --info --stacktrace  # 无 || true，如果失败则停止
+        ./gradlew assembleRelease --info --stacktrace  # 如果失败，工作流停止
     
     - name: Debug Build Outputs
-      if: always()  # 即使失败也运行
+      if: always()
       run: |
         echo "=== 构建输出目录内容（详细诊断） ==="
         tree app/build/ || ls -laR app/build/ || echo "app/build/ 目录不存在"
@@ -156,17 +181,17 @@ jobs:
         find app/build -type f -name "*.txt" -exec grep -i "error\|warning\|failed\|success" {} \; 2>/dev/null || echo "无报告文件"
         # 如果无APK/AAB，强制失败
         if [ $(find . -name "*.apk" -o -name "*.aab" | wc -l) -eq 0 ]; then
-          echo "错误: 没有生成任何APK或AAB文件！请检查build.gradle中的buildTypes { release { ... } } 和签名配置。"
+          echo "错误: 没有生成任何APK或AAB文件！请检查app/build.gradle中的android { buildTypes { release { ... } } } 配置。"
           exit 1
         fi
     
-    - name: Upload APK or AAB
+    - name: Upload Unsigned APK or AAB
       uses: actions/upload-artifact@v4
       with:
-        name: alltrans-release
+        name: alltrans-release-unsigned
         path: |
           app/build/outputs/**/*.apk
-          app/build/outputs/**/*.aab  # 支持bundle如果项目使用
+          app/build/outputs/**/*.aab
     
     - name: Upload Logs (always)
       if: always()
@@ -178,4 +203,5 @@ jobs:
           app/build/outputs/
           **/*.log
           gradlew
-          build.gradle
+          app/build.gradle
+          app/build.gradle.bak
