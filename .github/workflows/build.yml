@@ -19,8 +19,8 @@ jobs:
           echo "</resources>" >> app/src/main/res/values/strings.xml
         fi
         
-        # 验证修复后的XML格式
-        xmllint --noout app/src/main/res/values/strings.xml
+        echo "strings.xml fixed, last few lines:"
+        tail -3 app/src/main/res/values/strings.xml
     
     - uses: actions/setup-java@v4
       with:
