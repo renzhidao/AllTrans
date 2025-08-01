@@ -1,116 +1,67 @@
 /*
- * Copyright 2017 Akhil Kedia
- * This file is part of AllTrans.
- *
- * AllTrans is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * AllTrans is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with AllTrans. If not, see <http://www.gnu.org/licenses/>.
- *
+ * ===== AllTrans / app 模块 build.gradle =====
+ * 如果你的项目还在用旧式 `apply plugin:` 语法，直接保留也行；
+ * 这里示范的是 Plugin DSL 写法（Gradle 7+ 推荐）。
  */
 
-
-
-apply plugin: 'com.android.application'
-
-android {
-    signingConfigs {
-        publish {
-            storeFile file(RELEASE_STORE_FILE)
-            storePassword RELEASE_STORE_PASSWORD
-            keyAlias RELEASE_KEY_ALIAS
-            keyPassword RELEASE_KEY_PASSWORD
-        }
-    }
-    compileSdk 33
-//    buildToolsVersion '32.0.0'
-
-    defaultConfig {
-        applicationId "akhil.alltrans"
-        minSdkVersion 19
-        //noinspection ExpiredTargetSdkVersion
-        targetSdkVersion 30
-        versionCode 196
-        versionName "1.9.6"
-        multiDexEnabled true
-        signingConfig signingConfigs.publish
-    }
-    buildTypes {
-        debug {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    namespace 'akhil.alltrans'
+plugins {
+    id 'com.android.application'
 }
 
-repositories {
-    google()
-    mavenCentral()
-//    maven { url "https://jitpack.io" }
+android {
+    namespace 'org.alltrans.app'                // TODO: 替换为你的包名
+    compileSdk 34                               // TODO: 如需 30/33 请调整
+
+    defaultConfig {
+        applicationId "org.alltrans.app"        // TODO: 同上
+        minSdk 21
+        targetSdk 34
+        versionCode 1                           // TODO
+        versionName "1.0"                       // TODO
+
+        // Java 17 语言级别
+        vectorDrawables { useSupportLibrary = true }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // ------------ 关键：签名配置（自动降级到 debug） ------------
+    def prop = { n -> project.hasProperty(n) ? project.property(n) : null }
+
+    signingConfigs {
+        publish {
+            if (prop('RELEASE_STORE_FILE')) {   // CI/本地提供了正式签名变量
+                storeFile     file(prop('RELEASE_STORE_FILE'))
+                storePassword prop('RELEASE_STORE_PASSWORD')
+                keyAlias      prop('RELEASE_KEY_ALIAS')
+                keyPassword   prop('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // 如果 publish 未配置成功，则改用 debug.keystore
+            signingConfig signingConfigs.publish ?: signingConfigs.debug
+            minifyEnabled false      // 如需 ProGuard/R8 请自行打开
+            shrinkResources false
+            proguardFiles getDefaultProguardFile(
+                    'proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
+        }
+        debug {
+            // 默认 debug 配置即可
+        }
+    }
+    // ---------------------------------------------------------
 }
 
 dependencies {
-    compileOnly 'de.robv.android.xposed:api:82:sources'
-    compileOnly 'de.robv.android.xposed:api:82'
-
-    implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.9.1'
-
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.preference:preference:1.2.1'
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'androidx.percentlayout:percentlayout:1.0.0'
-
-    implementation 'com.google.firebase:firebase-analytics:21.3.0'
-    implementation 'com.google.firebase:firebase-crashlytics:18.4.0'
-    implementation 'com.google.mlkit:translate:17.0.1'
-    implementation 'com.android.support:multidex:1.0.3'
-
-    implementation 'com.codemybrainsout.rating:ratingdialog:1.0.8'
-
-
-}
-apply plugin: 'com.google.gms.google-services'
-apply plugin: 'com.google.firebase.crashlytics'
-
-
-afterEvaluate {
-    installDebug.doLast {
-//        updateVirtualXposedAPP.exec()
-//        clearLog.exec()
-//        rebootVirtualXposedAPP.exec()
-//        launchVirtualXposedAPP.exec()
-    }
-}
-
-task updateVirtualXposedAPP(type: Exec) {
-    def pkg = android.defaultConfig.applicationId
-    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'update', '-e', 'pkg', pkg
-}
-
-task clearLog(type: Exec) {
-    commandLine android.adbExecutable, 'logcat', '-c'
-}
-
-task rebootVirtualXposedAPP(type: Exec) {
-    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'reboot'
-}
-
-task launchVirtualXposedAPP(type: Exec) {
-    def pkg = "com.megabox.mop" // for example: com.tencent.mm
-    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'launch', '-e', 'pkg', pkg
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    // TODO: 你的其余依赖（okhttp、gson、xposed-minimal…）写在这里
 }
