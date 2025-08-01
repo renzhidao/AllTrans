@@ -20,22 +20,10 @@ jobs:
         env:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
-      # 如果你想正式签名，把下面注释解除并在仓库 Secrets 配 4 个字段
-      # - name: decode keystore & write gradle.properties
-      #   if: ${{ secrets.KEYSTORE_B64 != '' }}
-      #   env:
-      #     KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
-      #     KEY_ALIAS:     ${{ secrets.KEY_ALIAS }}
-      #     KEY_STORE_PWD: ${{ secrets.KEY_STORE_PWD }}
-      #     KEY_PWD:       ${{ secrets.KEY_PWD }}
-      #   run: |
-      #     echo "$KEYSTORE_B64" | base64 -d > keystore.jks
-      #     cat >> gradle.properties <<EOF
-      #     RELEASE_STORE_FILE=keystore.jks
-      #     RELEASE_STORE_PASSWORD=$KEY_STORE_PWD
-      #     RELEASE_KEY_ALIAS=$KEY_ALIAS
-      #     RELEASE_KEY_PASSWORD=$KEY_PWD
-      #     EOF
+      - name: Enable AndroidX
+        run: |
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
 
       - name: Build APK (app only)
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
