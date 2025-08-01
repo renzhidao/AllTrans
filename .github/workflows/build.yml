@@ -19,40 +19,41 @@ jobs:
         echo "=== 全面修复所有XML文件 ==="
         
         # 1. 修复 apps_list.xml
-        if ! grep -q "</LinearLayout>" app/src/main/res/layout/apps_list.xml; then
+        if ! grep -q "</LinearLayout>" app/src/main/res/layout/apps_list.xml 2>/dev/null; then
             echo "</LinearLayout>" >> app/src/main/res/layout/apps_list.xml
             echo "已修复: apps_list.xml"
         fi
         
         # 2. 修复 strings.xml
-        if ! grep -q "</resources>" app/src/main/res/values/strings.xml; then
+        if ! grep -q "</resources>" app/src/main/res/values/strings.xml 2>/dev/null; then
             echo "</resources>" >> app/src/main/res/values/strings.xml
             echo "已修复: strings.xml"
         fi
         
         # 3. 重写 keys.xml
+        mkdir -p app/src/main/res/values
         cat > app/src/main/res/values/keys.xml << 'KEYS_EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-</resources>
-KEYS_EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+        </resources>
+        KEYS_EOF
         echo "已重写: keys.xml"
         
         # 4. 确保drawable目录存在并修复图标文件
         mkdir -p app/src/main/res/drawable-anydpi-v4
         cat > app/src/main/res/drawable-anydpi-v4/ic_list_icon_placeholder.xml << 'ICON_EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24"
-    android:tint="?attr/colorOnSurface">
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2L11,7h2v2z"/>
-</vector>
-ICON_EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+            <path
+                android:fillColor="@android:color/white"
+                android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2L11,7h2v2z"/>
+        </vector>
+        ICON_EOF
         echo "已重写: ic_list_icon_placeholder.xml"
         
         # 5. 清理备份文件
