@@ -8,7 +8,7 @@ apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.firebase.crashlytics'
 
 android {
-    /*********** 兼容“缺少 Release 变量时自动退回 debug” ***********/
+    /*********** 兼容"缺少 Release 变量时自动退回 debug" ***********/
     def prop = { n -> project.hasProperty(n) ? project.property(n) : null }
 
     signingConfigs {
@@ -28,7 +28,7 @@ android {
     defaultConfig {
         applicationId "akhil.alltrans"
         minSdkVersion 19
-        targetSdkVersion 30        // 原注释保留
+        targetSdkVersion 33        // 修改：从 30 改为 33
         versionCode 196
         versionName "1.9.6"
         multiDexEnabled true
