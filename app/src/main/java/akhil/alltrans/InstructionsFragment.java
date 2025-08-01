@@ -19,6 +19,7 @@
 
 package akhil.alltrans;
 
+import akhil.alltrans.BuildConfig;  // 添加这行 import
 
 import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
