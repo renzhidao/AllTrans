@@ -1,26 +1,19 @@
-/*
- * ===== AllTrans / app 模块 build.gradle =====
- * 如果你的项目还在用旧式 `apply plugin:` 语法，直接保留也行；
- * 这里示范的是 Plugin DSL 写法（Gradle 7+ 推荐）。
- */
+/******************* AllTrans /app/build.gradle ************************/
 
 plugins {
     id 'com.android.application'
 }
 
 android {
-    namespace 'org.alltrans.app'                // TODO: 替换为你的包名
-    compileSdk 34                               // TODO: 如需 30/33 请调整
+    namespace       'org.alltrans.app'   // 就用这个；改不改随你
+    compileSdk      34
 
     defaultConfig {
-        applicationId "org.alltrans.app"        // TODO: 同上
-        minSdk 21
-        targetSdk 34
-        versionCode 1                           // TODO
-        versionName "1.0"                       // TODO
-
-        // Java 17 语言级别
-        vectorDrawables { useSupportLibrary = true }
+        applicationId   "org.alltrans.app"
+        minSdk          21
+        targetSdk       34
+        versionCode     1
+        versionName     "1.0"
     }
 
     compileOptions {
@@ -28,40 +21,38 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    // ------------ 关键：签名配置（自动降级到 debug） ------------
-    def prop = { n -> project.hasProperty(n) ? project.property(n) : null }
+    /************ 关键：签名（无变量→自动回落 debug） ************/
+    def _prop = { n -> project.hasProperty(n) ? project.property(n) : null }
 
     signingConfigs {
         publish {
-            if (prop('RELEASE_STORE_FILE')) {   // CI/本地提供了正式签名变量
-                storeFile     file(prop('RELEASE_STORE_FILE'))
-                storePassword prop('RELEASE_STORE_PASSWORD')
-                keyAlias      prop('RELEASE_KEY_ALIAS')
-                keyPassword   prop('RELEASE_KEY_PASSWORD')
+            if (_prop('RELEASE_STORE_FILE')) {
+                storeFile     file(_prop('RELEASE_STORE_FILE'))
+                storePassword _prop('RELEASE_STORE_PASSWORD')
+                keyAlias      _prop('RELEASE_KEY_ALIAS')
+                keyPassword   _prop('RELEASE_KEY_PASSWORD')
             }
         }
     }
 
     buildTypes {
         release {
-            // 如果 publish 未配置成功，则改用 debug.keystore
             signingConfig signingConfigs.publish ?: signingConfigs.debug
-            minifyEnabled false      // 如需 ProGuard/R8 请自行打开
+            minifyEnabled false
             shrinkResources false
-            proguardFiles getDefaultProguardFile(
-                    'proguard-android-optimize.txt'),
-                    'proguard-rules.pro'
+            proguardFiles  getDefaultProguardFile('proguard-android-optimize.txt'),
+                           'proguard-rules.pro'
         }
-        debug {
-            // 默认 debug 配置即可
-        }
+        debug { }
     }
-    // ---------------------------------------------------------
+    /***************************************************************/
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    // TODO: 你的其余依赖（okhttp、gson、xposed-minimal…）写在这里
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    compileOnly   'de.robv.android.xposed:api:82'
+    // 还有其它库？原仓库里有就自己继续加；这里给的已足够编过
 }
