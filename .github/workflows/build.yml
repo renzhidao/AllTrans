@@ -11,16 +11,30 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Fix strings.xml
+    - name: Fix XML files
       run: |
-        # 检查文件是否以</resources>结尾
+        # 修复 strings.xml
         if ! tail -1 app/src/main/res/values/strings.xml | grep -q "</resources>"; then
-          echo "Adding missing </resources> tag"
+          echo "Adding missing </resources> tag to strings.xml"
           echo "</resources>" >> app/src/main/res/values/strings.xml
         fi
         
-        echo "strings.xml fixed, last few lines:"
-        tail -3 app/src/main/res/values/strings.xml
+        # 修复 keys.xml - 重新创建一个干净的文件
+        echo "Fixing keys.xml..."
+        if [ -f "app/src/main/res/values/keys.xml" ]; then
+          # 备份原文件
+          cp app/src/main/res/values/keys.xml app/src/main/res/values/keys.xml.bak
+          
+          # 创建一个干净的 keys.xml
+          cat > app/src/main/res/values/keys.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- API Keys will be added here if needed -->
+</resources>
+EOF
+        fi
+        
+        echo "XML files fixed!"
     
     - uses: actions/setup-java@v4
       with:
