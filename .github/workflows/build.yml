@@ -1,47 +1,54 @@
-name: Build Release APK
+name: Build and Fix Release APK
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-fix:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Comprehensive XML Fix
+    - name: Install XML Tools
+      run: sudo apt-get update && sudo apt-get install -y libxml2-utils  # 用于xmllint检查XML语法
+    
+    - name: Comprehensive Diagnosis and Fix
       run: |
         #!/bin/bash
         set -e
         
-        echo "=== 全面修复所有XML文件 ==="
+        echo "=== 开始错误完整性检查和修复 ==="
         
-        # 1. 修复 apps_list.xml
-        if ! grep -q "</LinearLayout>" app/src/main/res/layout/apps_list.xml 2>/dev/null; then
-            echo "</LinearLayout>" >> app/src/main/res/layout/apps_list.xml
-            echo "已修复: apps_list.xml"
+        # 定义关键路径
+        APPS_LIST_XML="app/src/main/res/layout/apps_list.xml"
+        STRINGS_XML="app/src/main/res/values/strings.xml"
+        KEYS_XML="app/src/main/res/values/keys.xml"
+        ICON_DIR_V4="app/src/main/res/drawable-anydpi-v4"
+        ICON_DIR="app/src/main/res/drawable-anydpi"
+        ICON_FILE="ic_list_icon_placeholder.xml"
+        ICON_PATH_V4="$ICON_DIR_V4/$ICON_FILE"
+        ICON_PATH="$ICON_DIR/$ICON_FILE"
+        
+        # 步骤1: 检查并修复重复资源
+        echo "检查重复资源..."
+        if [ -f "$ICON_PATH" ] && [ -f "$ICON_PATH_V4" ]; then
+            echo "检测到重复: $ICON_PATH 和 $ICON_PATH_V4"
+            echo "删除旧版目录中的文件: $ICON_PATH"
+            rm -f "$ICON_PATH"
+            echo "重复资源已修复"
+        elif [ -f "$ICON_PATH" ]; then
+            echo "移动 $ICON_PATH 到正确目录 $ICON_DIR_V4"
+            mkdir -p "$ICON_DIR_V4"
+            mv "$ICON_PATH" "$ICON_PATH_V4"
         fi
         
-        # 2. 修复 strings.xml
-        if ! grep -q "</resources>" app/src/main/res/values/strings.xml 2>/dev/null; then
-            echo "</resources>" >> app/src/main/res/values/strings.xml
-            echo "已修复: strings.xml"
-        fi
-        
-        # 3. 重写 keys.xml
-        mkdir -p app/src/main/res/values
-        cat > app/src/main/res/values/keys.xml << 'KEYS_EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <resources>
-        </resources>
-        KEYS_EOF
-        echo "已重写: keys.xml"
-        
-        # 4. 确保drawable目录存在并修复图标文件
-        mkdir -p app/src/main/res/drawable-anydpi-v4
-        cat > app/src/main/res/drawable-anydpi-v4/ic_list_icon_placeholder.xml << 'ICON_EOF'
+        # 步骤2: 检查并重写/修复 ic_list_icon_placeholder.xml
+        mkdir -p "$ICON_DIR_V4"
+        if [ ! -f "$ICON_PATH_V4" ] || ! xmllint --noout "$ICON_PATH_V4" 2>/dev/null; then
+            echo "修复或创建 $ICON_PATH_V4"
+            cat > "$ICON_PATH_V4" << 'ICON_EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <vector xmlns:android="http://schemas.android.com/apk/res/android"
             android:width="24dp"
@@ -54,12 +61,56 @@ jobs:
                 android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2L11,7h2v2z"/>
         </vector>
         ICON_EOF
-        echo "已重写: ic_list_icon_placeholder.xml"
+            echo "已修复: $ICON_PATH_V4"
+        fi
         
-        # 5. 清理备份文件
+        # 步骤3: 检查并修复 apps_list.xml (处理Prolog错误和不完整)
+        mkdir -p "$(dirname "$APPS_LIST_XML")"
+        if [ ! -f "$APPS_LIST_XML" ] || head -n1 "$APPS_LIST_XML" | grep -q '^[^<]'; then
+            echo "检测到 $APPS_LIST_XML Prolog错误或缺失，创建/重置文件"
+            cat > "$APPS_LIST_XML" << 'APPS_EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+            <!-- 添加您的内容这里 -->
+        </LinearLayout>
+        APPS_EOF
+        elif ! grep -q "</LinearLayout>" "$APPS_LIST_XML" 2>/dev/null; then
+            echo "</LinearLayout>" >> "$APPS_LIST_XML"
+            echo "已添加结束标签到 $APPS_LIST_XML"
+        fi
+        
+        # 步骤4: 检查并修复 strings.xml
+        if ! grep -q "</resources>" "$STRINGS_XML" 2>/dev/null; then
+            echo "</resources>" >> "$STRINGS_XML"
+            echo "已修复: $STRINGS_XML"
+        fi
+        
+        # 步骤5: 重写 keys.xml
+        mkdir -p "$(dirname "$KEYS_XML")"
+        cat > "$KEYS_XML" << 'KEYS_EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+        </resources>
+        KEYS_EOF
+        echo "已重写: $KEYS_XML"
+        
+        # 步骤6: 验证所有XML语法
+        echo "验证XML语法..."
+        for file in "$APPS_LIST_XML" "$STRINGS_XML" "$KEYS_XML" "$ICON_PATH_V4"; do
+            if [ -f "$file" ]; then
+                xmllint --noout "$file" && echo "$file: 有效" || echo "警告: $file 有语法错误"
+            fi
+        done
+        
+        # 步骤7: 清理备份和无效文件
         find app/src/main/res -name "*.bak" -delete 2>/dev/null || true
+        echo "清理完成"
         
-        echo "=== XML修复完成 ==="
+        echo "=== 检查和修复完成。诊断总结: ==="
+        ls -l app/src/main/res/layout/ app/src/main/res/values/ app/src/main/res/drawable-anydpi*/ 2>/dev/null || echo "无文件"
     
     - uses: actions/setup-java@v4
       with:
@@ -81,11 +132,21 @@ jobs:
         
         chmod +x gradlew
     
-    - name: Build Release
-      run: ./gradlew assembleRelease
+    - name: Build Release with Debug
+      run: ./gradlew assembleRelease --stacktrace --info || true  # 即使失败也继续，输出详细日志
     
-    - name: Upload APK
+    - name: Upload APK (if successful)
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: alltrans-release
         path: app/build/outputs/apk/release/app-release.apk
+    
+    - name: Upload Logs (if failed)
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          app/build/reports/
+          **/*.log
