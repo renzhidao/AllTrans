@@ -11,55 +11,29 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Fix all incomplete XML files
+    - name: Fix XML files
       run: |
-        echo "=== 开始修复所有XML文件 ==="
+        echo "=== 修复 XML 文件 ==="
         
-        # 函数：检查并修复XML文件
-        check_and_fix_xml() {
-            local file="$1"
-            local expected_end="$2"
-            
-            if [ -f "$file" ]; then
-                if ! tail -1 "$file" | grep -q "$expected_end"; then
-                    echo "修复 $file - 添加 $expected_end"
-                    echo "$expected_end" >> "$file"
-                else
-                    echo "$file 已经有正确的结束标签"
-                fi
-            fi
-        }
-        
-        # 修复已知的问题文件
-        check_and_fix_xml "app/src/main/res/layout/apps_list.xml" "</LinearLayout>"
-        check_and_fix_xml "app/src/main/res/values/strings.xml" "</resources>"
-        
-        # 检查所有layout文件
-        for file in app/src/main/res/layout/*.xml; do
-            if [ -f "$file" ]; then
-                # 获取第一个元素标签
-                first_tag=$(grep -m1 "^<[^?!]" "$file" | sed 's/<KATEX_INLINE_OPEN[^ >\/]*KATEX_INLINE_CLOSE.*/\1/')
-                if [ ! -z "$first_tag" ]; then
-                    check_and_fix_xml "$file" "</$first_tag>"
-                fi
-            fi
-        done
-        
-        # 检查所有values文件
-        for file in app/src/main/res/values/*.xml; do
-            if [ -f "$file" ]; then
-                check_and_fix_xml "$file" "</resources>"
-            fi
-        done
-        
-        # 重新创建 keys.xml（如果有问题）
-        if [ -f "app/src/main/res/values/keys.xml" ]; then
-            echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
-            echo '<resources>' >> app/src/main/res/values/keys.xml
-            echo '</resources>' >> app/src/main/res/values/keys.xml
+        # 1. 修复 apps_list.xml - 添加缺失的结束标签
+        if ! grep -q "</LinearLayout>" app/src/main/res/layout/apps_list.xml; then
+            echo "修复 apps_list.xml"
+            echo "</LinearLayout>" >> app/src/main/res/layout/apps_list.xml
         fi
         
-        echo "=== XML文件修复完成 ==="
+        # 2. 修复 strings.xml - 添加缺失的结束标签
+        if ! grep -q "</resources>" app/src/main/res/values/strings.xml; then
+            echo "修复 strings.xml"
+            echo "</resources>" >> app/src/main/res/values/strings.xml
+        fi
+        
+        # 3. 重新创建 keys.xml
+        echo "创建 keys.xml"
+        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
+        echo '<resources>' >> app/src/main/res/values/keys.xml
+        echo '</resources>' >> app/src/main/res/values/keys.xml
+        
+        echo "=== XML 文件修复完成 ==="
     
     - uses: actions/setup-java@v4
       with:
