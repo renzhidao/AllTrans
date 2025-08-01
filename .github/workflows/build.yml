@@ -1,36 +1,38 @@
-name: Build AllTrans (legacy AGP)
+name: Build AllTrans (AGP 8.x)
 
-on:
-  workflow_dispatch:
-  push:
-    paths: ["**/*.java", "**/*.xml", "**/*.gradle"]
+on: [push]     # 每次推送自动跑；按需改成 main 分支或 PR 触发
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 拉代码
+      # 1. checkout
       - uses: actions/checkout@v4
 
-      # 2. JDK 8
+      # 2. 配 JDK 17（也可以 11；17 是 AGP 官方推荐）
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 8
+          java-version: 17
           cache: gradle
 
-      # 3. 告诉 Gradle SDK 在哪（GitHub 镜像机自带 /usr/local/lib/android/sdk）
+      # 3. Android SDK：Runner 本身已自带 33 / 34 的平台和 34.0.0 build-tools；
+      #    只需给 gradle 写个 local.properties 即可
       - name: Generate local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
         env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk   # 这个变量 Runner 默认已设置
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
-      # 4. 编译
+      # 4. 如果你的 compileSdkVersion 低于 33，或者需要特定 buildTools，可以在这里额外装：
+      # - name: Ensure platform 34 & build-tools 34.0.0
+      #   run: yes | sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      # 5. build
       - name: Build APKs
         run: ./gradlew :app:assembleRelease :module:assembleRelease --no-daemon --stacktrace
 
-      # 5. 上传
+      # 6. upload
       - uses: actions/upload-artifact@v4
         with:
           name: APK
