@@ -10,43 +10,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ 拉代码
-      - name: Checkout
-        uses: actions/checkout@v4            # ← v4
+      # 1. 拉代码
+      - uses: actions/checkout@v4
 
-      # 2️⃣ JDK 8
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4          # ← v4
+      # 2. JDK 8
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: 8
           cache: gradle
 
-      # 3️⃣ 安装 Android SDK 30
-      - name: Install Android SDK 30
-        shell: bash
+      # 3. 告诉 Gradle SDK 在哪（GitHub 镜像机自带 /usr/local/lib/android/sdk）
+      - name: Generate local.properties
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
         env:
-          ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
-        run: |
-          mkdir -p $ANDROID_SDK_ROOT
-          cd $ANDROID_SDK_ROOT
-          curl -sSLo cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
-          unzip -q cmdline.zip -d cmdline
-          yes | cmdline/tools/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
-              "platform-tools" \
-              "platforms;android-30" \
-              "build-tools;30.0.3"
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk   # 这个变量 Runner 默认已设置
 
-      # 4️⃣ local.properties
-      - run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-
-      # 5️⃣ 编译
+      # 4. 编译
       - name: Build APKs
         run: ./gradlew :app:assembleRelease :module:assembleRelease --no-daemon --stacktrace
 
-      # 6️⃣ 上传产物
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4      # ← v4
+      # 5. 上传
+      - uses: actions/upload-artifact@v4
         with:
           name: APK
           path: |
