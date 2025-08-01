@@ -22,15 +22,92 @@ jobs:
         mkdir -p app/src/main/res/values
         echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > app/src/main/res/values/keys.xml
         
-        # 修复可能损坏的XML文件
+        # 修复apps_list.xml
         echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><ListView android:id="@+id/apps_list" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>' > app/src/main/res/layout/apps_list.xml
         
-        # 创建假的google-services.json（Firebase需要但不验证内容）
+        # 创建假的google-services.json
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
-        # 移除签名要求
-        sed -i '/signingConfigs {/,/}/d' app/build.gradle
-        sed -i '/signingConfig signingConfigs.publish/d' app/build.gradle
+        # 直接覆盖build.gradle为无签名版本
+        cat > app/build.gradle << 'EOF'
+apply plugin: 'com.android.application'
+
+android {
+    compileSdk 33
+
+    defaultConfig {
+        applicationId "akhil.alltrans"
+        minSdkVersion 19
+        targetSdkVersion 30
+        versionCode 196
+        versionName "1.9.6"
+        multiDexEnabled true
+    }
+    buildTypes {
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    namespace 'akhil.alltrans'
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'de.robv.android.xposed:api:82:sources'
+    compileOnly 'de.robv.android.xposed:api:82'
+
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.9.1'
+
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'androidx.percentlayout:percentlayout:1.0.0'
+
+    implementation 'com.google.firebase:firebase-analytics:21.3.0'
+    implementation 'com.google.firebase:firebase-crashlytics:18.4.0'
+    implementation 'com.google.mlkit:translate:17.0.1'
+    implementation 'com.android.support:multidex:1.0.3'
+
+    implementation 'com.codemybrainsout.rating:ratingdialog:1.0.8'
+}
+
+apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.firebase.crashlytics'
+
+afterEvaluate {
+    installDebug.doLast {
+    }
+}
+
+task updateVirtualXposedAPP(type: Exec) {
+    def pkg = android.defaultConfig.applicationId
+    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'update', '-e', 'pkg', pkg
+}
+
+task clearLog(type: Exec) {
+    commandLine android.adbExecutable, 'logcat', '-c'
+}
+
+task rebootVirtualXposedAPP(type: Exec) {
+    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'reboot'
+}
+
+task launchVirtualXposedAPP(type: Exec) {
+    def pkg = "com.megabox.mop"
+    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'launch', '-e', 'pkg', pkg
+}
+EOF
         
         # 构建
         chmod +x gradlew
