@@ -19,17 +19,18 @@ jobs:
           echo "</resources>" >> app/src/main/res/values/strings.xml
         fi
         
-        # 修复 keys.xml - 重新创建一个干净的文件
+        # 修复 keys.xml - 直接删除并重新创建
         echo "Fixing keys.xml..."
         if [ -f "app/src/main/res/values/keys.xml" ]; then
-          echo "Backing up original keys.xml"
-          cp app/src/main/res/values/keys.xml app/src/main/res/values/keys.xml.bak
-          
-          echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
-          echo '<resources>' >> app/src/main/res/values/keys.xml
-          echo '    <!-- API Keys will be added here if needed -->' >> app/src/main/res/values/keys.xml
-          echo '</resources>' >> app/src/main/res/values/keys.xml
+          echo "Removing problematic keys.xml"
+          rm app/src/main/res/values/keys.xml
         fi
+        
+        # 创建新的干净的 keys.xml
+        echo '<?xml version="1.0" encoding="utf-8"?>' > app/src/main/res/values/keys.xml
+        echo '<resources>' >> app/src/main/res/values/keys.xml
+        echo '    <!-- API Keys will be added here if needed -->' >> app/src/main/res/values/keys.xml
+        echo '</resources>' >> app/src/main/res/values/keys.xml
         
         echo "XML files fixed!"
     
