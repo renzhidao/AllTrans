@@ -119,34 +119,46 @@ jobs:
     
     - name: Setup build environment
       run: |
+        # 生成keystore在当前目录
         keytool -genkey -v -keystore release.keystore -alias key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android,O=Android,C=US"
         
-        echo "RELEASE_STORE_FILE=../release.keystore" >> gradle.properties
+        # 使用绝对路径避免相对路径问题
+        echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/release.keystore" >> gradle.properties
         echo "RELEASE_STORE_PASSWORD=android" >> gradle.properties
         echo "RELEASE_KEY_ALIAS=key" >> gradle.properties
         echo "RELEASE_KEY_PASSWORD=android" >> gradle.properties
         echo "android.useAndroidX=true" >> gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
         
+        # 生成google-services.json
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
         chmod +x gradlew
     
     - name: Build Release with Debug
-      run: ./gradlew assembleRelease --stacktrace --info || true  # 即使失败也继续，输出详细日志
+      run: ./gradlew assembleRelease --stacktrace --info  # 移除 || true，如果失败则工作流失败
     
-    - name: Upload APK (if successful)
-      if: success()
+    - name: Debug Build Outputs
+      run: |
+        echo "=== 构建输出目录内容 ==="
+        ls -la app/build/outputs/ || echo "目录不存在"
+        ls -la app/build/outputs/apk/ || echo "APK目录不存在"
+        ls -la app/build/outputs/apk/release/ || echo "Release APK目录不存在"
+        find app/build -name "*.apk" || echo "无APK文件"
+    
+    - name: Check and Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: alltrans-release
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/release/*.apk  # 使用通配符捕获任何APK
+      continue-on-error: true  # 如果无文件，继续但显示警告
     
-    - name: Upload Logs (if failed)
-      if: failure()
+    - name: Upload Logs (always)
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: build-logs
         path: |
           app/build/reports/
           **/*.log
+          gradlew
