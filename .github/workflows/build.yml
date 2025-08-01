@@ -1,130 +1,51 @@
-name: Build APK
+name: Build AllTrans (legacy AGP)
 
 on:
+  workflow_dispatch:        # 手动触发，避免每次 push 都跑
   push:
-  workflow_dispatch:
+    paths: ["**/*.java", "**/*.xml", "**/*.gradle"]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-    
-    - name: Prepare and Build
-      run: |
-        # 创建必需的空文件
-        mkdir -p app/src/main/res/values
-        echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > app/src/main/res/values/keys.xml
-        
-        # 修复apps_list.xml
-        mkdir -p app/src/main/res/layout
-        echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"><ListView android:id="@+id/apps_list" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>' > app/src/main/res/layout/apps_list.xml
-        
-        # 创建假的google-services.json
-        mkdir -p app
-        echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
-        
-        # 修复点1: 使用正确的EOF语法
-        cat > app/build.gradle <<'EOF'
-apply plugin: 'com.android.application'
+      - name: Checkout
+        uses: actions/checkout@v3
 
-android {
-    compileSdk 33
+      # 用 JDK 8，避免 JAXB 缺失
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: 8
+          cache: gradle
 
-    defaultConfig {
-        applicationId "akhil.alltrans"
-        minSdkVersion 19
-        targetSdkVersion 30
-        versionCode 196
-        versionName "1.9.6"
-        multiDexEnabled true
-    }
-    buildTypes {
-        debug {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    namespace 'akhil.alltrans'
-}
+      # 自己装旧版 cmdline-tools + platform 30 + build-tools 30.0.3
+      - name: Install Android SDK 30
+        shell: bash
+        env:
+          ANDROID_SDK_ROOT: ${{ runner.tool_cache }}/android-sdk
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT
+          cd $ANDROID_SDK_ROOT
+          curl -sSLo cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip
+          unzip -q cmdline.zip -d cmdline
+          yes | cmdline/tools/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+              "platform-tools" \
+              "platforms;android-30" \
+              "build-tools;30.0.3"
 
-repositories {
-    google()
-    mavenCentral()
-}
+      # 生成 local.properties
+      - run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-dependencies {
-    compileOnly 'de.robv.android.xposed:api:82:sources'
-    compileOnly 'de.robv.android.xposed:api:82'
+      # 使用仓库内 Gradle Wrapper (5.1.1)
+      - name: Build APKs
+        run: ./gradlew :app:assembleRelease :module:assembleRelease --no-daemon --stacktrace
 
-    implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.9.1'
-
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.preference:preference:1.2.1'
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'androidx.percentlayout:percentlayout:1.0.0'
-
-    implementation 'com.google.firebase:firebase-analytics:21.3.0'
-    implementation 'com.google.firebase:firebase-crashlytics:18.4.0'
-    implementation 'com.google.mlkit:translate:17.0.1'
-    implementation 'com.android.support:multidex:1.0.3'
-
-    implementation 'com.codemybrainsout.rating:ratingdialog:1.0.8'
-}
-
-apply plugin: 'com.google.gms.google-services'
-apply plugin: 'com.google.firebase.crashlytics'
-
-afterEvaluate {
-    installDebug.doLast {
-    }
-}
-
-task updateVirtualXposedAPP(type: Exec) {
-    def pkg = android.defaultConfig.applicationId
-    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'update', '-e', 'pkg', pkg
-}
-
-task clearLog(type: Exec) {
-    commandLine android.adbExecutable, 'logcat', '-c'
-}
-
-task rebootVirtualXposedAPP(type: Exec) {
-    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'reboot'
-}
-
-task launchVirtualXposedAPP(type: Exec) {
-    def pkg = "com.megabox.mop"
-    commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'launch', '-e', 'pkg', pkg
-}
-EOF
-        
-        # 修复点2: 添加文件验证
-        echo "=== 文件验证 ==="
-        ls -l app/src/main/res/values/keys.xml
-        ls -l app/src/main/res/layout/apps_list.xml
-        ls -l app/google-services.json
-        head -n 5 app/build.gradle
-        
-        # 构建
-        chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace --info
-    
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: alltrans-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: error
+      - uses: actions/upload-artifact@v3
+        with:
+          name: APK
+          path: |
+            app/build/outputs/apk/release/*.apk
+            module/build/outputs/apk/release/*.apk
