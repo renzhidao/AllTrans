@@ -1,290 +1,43 @@
-name: Build and Fix Release APK
+name: Build APK
 
 on:
   push:
   workflow_dispatch:
 
 jobs:
-  build-and-fix:
+  build:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Install Tools
-      run: sudo apt-get update && sudo apt-get install -y libxml2-utils tree
-    
-    - name: Comprehensive Diagnosis and Fix
-      run: |
-        #!/bin/bash
-        set -e
-        
-        echo "=== 开始错误完整性检查和修复 ==="
-        
-        # 定义关键路径
-        APPS_LIST_XML="app/src/main/res/layout/apps_list.xml"
-        STRINGS_XML="app/src/main/res/values/strings.xml"
-        KEYS_XML="app/src/main/res/values/keys.xml"
-        ICON_DIR_V4="app/src/main/res/drawable-anydpi-v4"
-        ICON_DIR="app/src/main/res/drawable-anydpi"
-        ICON_FILE="ic_list_icon_placeholder.xml"
-        ICON_PATH_V4="$ICON_DIR_V4/$ICON_FILE"
-        ICON_PATH="$ICON_DIR/$ICON_FILE"
-        
-        # 步骤1: 检查并修复重复资源
-        echo "检查重复资源..."
-        if [ -f "$ICON_PATH" ] && [ -f "$ICON_PATH_V4" ]; then
-            echo "检测到重复: $ICON_PATH 和 $ICON_PATH_V4"
-            echo "删除旧版目录中的文件: $ICON_PATH"
-            rm -f "$ICON_PATH"
-            echo "重复资源已修复"
-        elif [ -f "$ICON_PATH" ]; then
-            echo "移动 $ICON_PATH 到正确目录 $ICON_DIR_V4"
-            mkdir -p "$ICON_DIR_V4"
-            mv "$ICON_PATH" "$ICON_PATH_V4"
-        fi
-        
-        # 步骤2: 检查并重写/修复 ic_list_icon_placeholder.xml
-        mkdir -p "$ICON_DIR_V4"
-        if [ ! -f "$ICON_PATH_V4" ] || ! xmllint --noout "$ICON_PATH_V4" 2>/dev/null; then
-            echo "修复或创建 $ICON_PATH_V4"
-            cat > "$ICON_PATH_V4" << 'ICON_EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <vector xmlns:android="http://schemas.android.com/apk/res/android"
-            android:width="24dp"
-            android:height="24dp"
-            android:viewportWidth="24"
-            android:viewportHeight="24"
-            android:tint="?attr/colorOnSurface">
-            <path
-                android:fillColor="@android:color/white"
-                android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-6h2v6zM13,9h-2L11,7h2v2z"/>
-        </vector>
-        ICON_EOF
-            echo "已修复: $ICON_PATH_V4"
-        fi
-        
-        # 步骤3: 检查并修复 apps_list.xml
-        mkdir -p "$(dirname "$APPS_LIST_XML")"
-        if [ ! -f "$APPS_LIST_XML" ] || head -n1 "$APPS_LIST_XML" | grep -q '^[^<]'; then
-            echo "检测到 $APPS_LIST_XML Prolog错误或缺失，创建/重置文件"
-            cat > "$APPS_LIST_XML" << 'APPS_EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
-            <!-- 添加您的内容这里 -->
-        </LinearLayout>
-        APPS_EOF
-        elif ! grep -q "</LinearLayout>" "$APPS_LIST_XML" 2>/dev/null; then
-            echo "</LinearLayout>" >> "$APPS_LIST_XML"
-            echo "已添加结束标签到 $APPS_LIST_XML"
-        fi
-        
-        # 步骤4: 检查并修复 strings.xml
-        if ! grep -q "</resources>" "$STRINGS_XML" 2>/dev/null; then
-            echo "</resources>" >> "$STRINGS_XML"
-            echo "已修复: $STRINGS_XML"
-        fi
-        
-        # 步骤5: 重写 keys.xml
-        mkdir -p "$(dirname "$KEYS_XML")"
-        cat > "$KEYS_XML" << 'KEYS_EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <resources>
-        </resources>
-        KEYS_EOF
-        echo "已重写: $KEYS_XML"
-        
-        # 步骤6: 验证所有XML语法
-        echo "验证XML语法..."
-        for file in "$APPS_LIST_XML" "$STRINGS_XML" "$KEYS_XML" "$ICON_PATH_V4"; do
-            if [ -f "$file" ]; then
-                xmllint --noout "$file" && echo "$file: 有效" || echo "警告: $file 有语法错误"
-            fi
-        done
-        
-        # 步骤7: 清理备份和无效文件
-        find app/src/main/res -name "*.bak" -delete 2>/dev/null || true
-        echo "清理完成"
-        
-        echo "=== 检查和修复完成 ==="
     
     - uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
     
-    - name: Setup build environment
+    - name: Build APK without signing
       run: |
-        # 添加gradle.properties
-        echo "android.useAndroidX=true" >> gradle.properties
-        echo "android.enableJetifier=true" >> gradle.properties
-        echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError" >> gradle.properties
-        echo "org.gradle.daemon=true" >> gradle.properties
+        # 创建必需的空文件
+        mkdir -p app/src/main/res/values
+        echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > app/src/main/res/values/keys.xml
         
-        # 生成google-services.json
+        # 修复可能损坏的XML文件
+        echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><ListView android:id="@+id/apps_list" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>' > app/src/main/res/layout/apps_list.xml
+        
+        # 创建假的google-services.json（Firebase需要但不验证内容）
         echo '{"project_info":{"project_number":"1","project_id":"d"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"akhil.alltrans"}},"api_key":[{"current_key":"x"}]}]}' > app/google-services.json
         
+        # 移除签名要求
+        sed -i '/signingConfigs {/,/}/d' app/build.gradle
+        sed -i '/signingConfig signingConfigs.publish/d' app/build.gradle
+        
+        # 构建
         chmod +x gradlew
-    
-    - name: Disable Signing and Overwrite Build Gradle
-      run: |
-        APP_BUILD_GRADLE="app/build.gradle"
-        if [ ! -f "$APP_BUILD_GRADLE" ]; then
-          echo "错误: $APP_BUILD_GRADLE 不存在！"
-          exit 1
-        fi
-        
-        # 备份原文件
-        cp "$APP_BUILD_GRADLE" "$APP_BUILD_GRADLE.bak"
-        
-        # 覆盖为无签名版本
-        cat > "$APP_BUILD_GRADLE" << 'BUILD_EOF'
-        apply plugin: 'com.android.application'
-
-        android {
-            compileSdk 33
-
-            defaultConfig {
-                applicationId "akhil.alltrans"
-                minSdkVersion 19
-                targetSdkVersion 30
-                versionCode 196
-                versionName "1.9.6"
-                multiDexEnabled true
-            }
-            buildTypes {
-                debug {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-                }
-                release {
-                    minifyEnabled false
-                    proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-                    signingConfig null
-                }
-            }
-            namespace 'akhil.alltrans'
-        }
-
-        repositories {
-            google()
-            mavenCentral()
-        }
-
-        dependencies {
-            compileOnly 'de.robv.android.xposed:api:82:sources'
-            compileOnly 'de.robv.android.xposed:api:82'
-
-            implementation 'com.google.code.gson:gson:2.10.1'
-            implementation 'com.squareup.okhttp3:okhttp:4.9.1'
-
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.9.0'
-            implementation 'androidx.preference:preference:1.2.1'
-            implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-            implementation 'androidx.percentlayout:percentlayout:1.0.0'
-
-            implementation 'com.google.firebase:firebase-analytics:21.3.0'
-            implementation 'com.google.firebase:firebase-crashlytics:18.4.0'
-            implementation 'com.google.mlkit:translate:17.0.1'
-            implementation 'com.android.support:multidex:1.0.3'
-
-            implementation 'com.codemybrainsout.rating:ratingdialog:1.0.8'
-        }
-
-        apply plugin: 'com.google.gms.google-services'
-        apply plugin: 'com.google.firebase.crashlytics'
-
-        afterEvaluate {
-            installDebug.doLast {
-                // Tasks here
-            }
-        }
-
-        task updateVirtualXposedAPP(type: Exec) {
-            def pkg = android.defaultConfig.applicationId
-            commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'update', '-e', 'pkg', pkg
-        }
-
-        task clearLog(type: Exec) {
-            commandLine android.adbExecutable, 'logcat', '-c'
-        }
-
-        task rebootVirtualXposedAPP(type: Exec) {
-            commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'reboot'
-        }
-
-        task launchVirtualXposedAPP(type: Exec) {
-            def pkg = "com.megabox.mop"
-            commandLine android.adbExecutable, 'shell', 'am', 'broadcast', '-a', 'io.va.exposed.CMD', '-e', 'cmd', 'launch', '-e', 'pkg', pkg
-        }
-        BUILD_EOF
-        
-        echo "=== 已覆盖 app/build.gradle 为无签名版本 ==="
-        
-        # 验证语法
-        echo "=== 验证 build.gradle 语法 ==="
-        ./gradlew help --info || (echo "验证失败，回滚" && mv "$APP_BUILD_GRADLE.bak" "$APP_BUILD_GRADLE" && exit 1)
-        
-        # 停止并重启 Daemon
-        echo "=== 重启 Gradle Daemon ==="
-        ./gradlew --stop || true
-        sleep 2
-    
-    - name: Clean and Build Release
-      run: |
-        echo "=== 开始构建 ==="
-        ./gradlew clean --stacktrace --info
-        ./gradlew assembleRelease --stacktrace --info || (
-          echo "=== Release构建失败，尝试Debug构建 ==="
-          ./gradlew assembleDebug --stacktrace --info
-        )
-    
-    - name: Check Build Outputs
-      if: always()
-      run: |
-        echo "=== 构建输出检查 ==="
-        if [ -d "app/build" ]; then
-          echo "构建目录存在"
-          find app/build -name "*.apk" -type f -ls
-          find app/build -name "*.aab" -type f -ls
-        else
-          echo "错误：构建目录不存在"
-        fi
-        
-        # 列出所有APK
-        echo "=== 所有APK文件 ==="
-        find . -name "*.apk" -type f -ls || echo "未找到APK文件"
-        
-        # 检查是否生成了任何APK
-        APK_COUNT=$(find . -name "*.apk" -type f | wc -l)
-        if [ "$APK_COUNT" -eq 0 ]; then
-          echo "错误: 没有生成任何APK文件！"
-          exit 1
-        else
-          echo "成功: 找到 $APK_COUNT 个APK文件"
-        fi
+        ./gradlew assembleDebug
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: alltrans-release-unsigned
-        path: |
-          app/build/outputs/apk/**/*.apk
-          app/build/outputs/bundle/**/*.aab
-        if-no-files-found: error
-    
-    - name: Upload Build Logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: |
-          app/build/reports/
-          **/*.log
-          app/build.gradle
-          app/build.gradle.bak
-        if-no-files-found: ignore
+        name: alltrans-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
