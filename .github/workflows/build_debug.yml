@@ -14,20 +14,22 @@ jobs:
           distribution: temurin
           java-version: 17
           
-      - name: Setup gradle
+      - name: Setup gradle and fix signing
         run: |
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
           echo "android.useAndroidX=true" >> gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m" >> gradle.properties
-          echo "RELEASE_STORE_FILE=dummy.jks" >> gradle.properties
-          echo "RELEASE_STORE_PASSWORD=dummy" >> gradle.properties
-          echo "RELEASE_KEY_ALIAS=dummy" >> gradle.properties
-          echo "RELEASE_KEY_PASSWORD=dummy" >> gradle.properties
+          # 创建临时keystore
+          keytool -genkey -v -keystore dummy.jks -keyalg RSA -keysize 2048 -validity 10000 -alias dummy -storepass dummy -keypass dummy -dname "CN=test, O=test, L=test, S=test, C=US"
           
       - name: Build Debug APK
         env:
           GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
+          RELEASE_STORE_FILE: dummy.jks
+          RELEASE_STORE_PASSWORD: dummy
+          RELEASE_KEY_ALIAS: dummy
+          RELEASE_KEY_PASSWORD: dummy
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
         
       - uses: actions/upload-artifact@v4
